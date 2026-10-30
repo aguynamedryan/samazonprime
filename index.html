@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Scanner">
+<meta name="theme-color" content="#000000">
+<title>Package Scanner</title>
+<style>
+  :root {
+    --laser: #ff2a2a;
+    --ok: #29d36a;
+    --bg: #0b0d10;
+    --panel: #161a20;
+    --text: #e8edf2;
+    --muted: #8a96a3;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    overflow: hidden; user-select: none; -webkit-user-select: none;
+    touch-action: manipulation; overscroll-behavior: none;
+  }
+  #app {
+    height: 100%; display: flex; flex-direction: column;
+    padding: calc(env(safe-area-inset-top) + 12px) 16px calc(env(safe-area-inset-bottom) + 16px);
+    gap: 14px;
+  }
+  header { display: flex; justify-content: space-between; align-items: center; font-size: 14px; color: var(--muted); }
+  header .brand { color: #ff9900; font-weight: 700; letter-spacing: .5px; }
+  header .brand img { height: 28px; display: block; }
+  #start .logo { width: min(80vw, 380px); }
+  #viewfinder {
+    position: relative; flex: 1; border-radius: 18px; background: var(--panel);
+    border: 2px solid #232a33; overflow: hidden;
+  }
+  /* corner brackets */
+  #viewfinder::before, #viewfinder::after {
+    content: ""; position: absolute; inset: 14%; border: 4px solid rgba(255,255,255,.18);
+    border-radius: 10px;
+    -webkit-mask: linear-gradient(#000 0 0) top left / 22% 22% no-repeat,
+                  linear-gradient(#000 0 0) top right / 22% 22% no-repeat,
+                  linear-gradient(#000 0 0) bottom left / 22% 22% no-repeat,
+                  linear-gradient(#000 0 0) bottom right / 22% 22% no-repeat;
+            mask: linear-gradient(#000 0 0) top left / 22% 22% no-repeat,
+                  linear-gradient(#000 0 0) top right / 22% 22% no-repeat,
+                  linear-gradient(#000 0 0) bottom left / 22% 22% no-repeat,
+                  linear-gradient(#000 0 0) bottom right / 22% 22% no-repeat;
+  }
+  #viewfinder::after { display: none; }
+  #laser {
+    position: absolute; left: 10%; right: 10%; height: 3px; top: 50%;
+    background: var(--laser); border-radius: 2px;
+    box-shadow: 0 0 12px 3px rgba(255,42,42,.75), 0 0 40px 8px rgba(255,42,42,.35);
+    animation: sweep 1.6s ease-in-out infinite alternate;
+  }
+  @keyframes sweep { from { top: 22%; } to { top: 78%; } }
+  #status {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center; gap: 10px;
+    pointer-events: none;
+  }
+  #status .big { font-size: 30px; font-weight: 800; letter-spacing: 1px; }
+  #status .small { font-size: 15px; color: var(--muted); }
+  #check { display: none; font-size: 96px; line-height: 1; color: var(--ok); }
+  #flash { position: absolute; inset: 0; background: var(--ok); opacity: 0; pointer-events: none; }
+  .scanned #laser { display: none; }
+  .scanned #check { display: block; animation: pop .25s ease-out; }
+  .scanned #status .big { color: var(--ok); }
+  .scanned #viewfinder { border-color: var(--ok); }
+  .scanned #flash { animation: flash .35s ease-out; }
+  @keyframes pop { from { transform: scale(.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  @keyframes flash { from { opacity: .55; } to { opacity: 0; } }
+  #details {
+    background: var(--panel); border-radius: 14px; padding: 12px 14px; font-size: 15px;
+    display: grid; grid-template-columns: auto 1fr; gap: 6px 12px;
+  }
+  #details dt { color: var(--muted); }
+  #details dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+  #hint { text-align: center; color: var(--muted); font-size: 13px; }
+  #start {
+    position: fixed; inset: 0; background: rgba(0,0,0,.92); display: flex;
+    flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+    text-align: center; padding: 24px; z-index: 10;
+  }
+  #start .big { font-size: 28px; font-weight: 800; }
+  #start .small { color: var(--muted); font-size: 15px; max-width: 320px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <span class="brand" id="brand">PACKAGE SCANNER</span>
+    <span id="clock"></span>
+  </header>
+
+  <div id="viewfinder">
+    <div id="laser"></div>
+    <div id="flash"></div>
+    <div id="status">
+      <div id="check">✓</div>
+      <div class="big" id="statusBig">READY TO SCAN</div>
+      <div class="small" id="statusSmall">Tap anywhere to scan</div>
+    </div>
+  </div>
+
+  <dl id="details">
+    <dt>Tracking</dt><dd id="tracking">—</dd>
+    <dt>Contents</dt><dd>1 × Child, assorted</dd>
+    <dt>Status</dt><dd id="deliveryStatus">Out for delivery</dd>
+    <dt>Stops tonight</dt><dd id="count">0</dd>
+  </dl>
+
+  <div id="hint">The stop count resets after 12 hours with no scans</div>
+</div>
+
+<div id="start">
+  <img id="startLogo" class="logo" alt="samazon prime" hidden>
+  <div class="big">Tap to start shift</div>
+  <div class="small">This unlocks sound. Turn the volume up. On iPhone, the silent switch can mute the beep.</div>
+</div>
+
+<script>
+  // Beep tuning. Override in the URL, for example ?hz=2400&ms=150&vol=0.8
+  const params = new URLSearchParams(location.search);
+  const BEEP_HZ = Number(params.get("hz") || 2700);
+  const BEEP_MS = Number(params.get("ms") || 110);
+  const BEEP_VOL = Number(params.get("vol") || 0.6);
+  const SCANNED_SHOW_MS = 2200;   // how long the "scanned" screen stays up
+  const TAP_LOCKOUT_MS = 500;     // ignore extra taps right after a scan
+
+  // Samazon Prime branding: on GitHub Pages (/samazonprime/), on a samazonprime.* host,
+  // or with ?brand=samazon.
+  const SAMAZON = location.pathname.startsWith("/samazonprime")
+    || location.hostname.startsWith("samazonprime.")
+    || params.get("brand") === "samazon";
+  const LOGO = "logo/samazon-prime-white.svg";
+  const DELIVERED_TEXT = SAMAZON ? "Delivered by Samazon Prime" : "Package delivered to front door";
+  if (SAMAZON) {
+    document.title = "Samazon Prime Scanner";
+    document.getElementById("brand").innerHTML = `<img src="${LOGO}" alt="samazon prime">`;
+    const startLogo = document.getElementById("startLogo");
+    startLogo.src = LOGO;
+    startLogo.hidden = false;
+  }
+
+  const app = document.getElementById("app");
+  const statusBig = document.getElementById("statusBig");
+  const statusSmall = document.getElementById("statusSmall");
+  const tracking = document.getElementById("tracking");
+  const deliveryStatus = document.getElementById("deliveryStatus");
+  const countEl = document.getElementById("count");
+  const startEl = document.getElementById("start");
+
+  let ctx = null;
+  let lastScan = 0;
+  let resetTimer = null;
+  // The stop count is for one night: it resets after 12 hours with no scans.
+  const lastSeen = Number(localStorage.getItem("scanmazon.lastScanAt") || 0);
+  if (Date.now() - lastSeen > 12 * 3600 * 1000) localStorage.setItem("scanmazon.count", 0);
+  let count = Number(localStorage.getItem("scanmazon.count") || 0);
+  countEl.textContent = count;
+
+  function log(...args) { console.log("[scanmazon]", ...args); }
+
+  function unlockAudio() {
+    // iOS 16.4+: play Web Audio even when the ringer switch is on silent.
+    if (navigator.audioSession) {
+      try { navigator.audioSession.type = "playback"; } catch (e) { log("audioSession failed", e); }
+    }
+    if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (ctx.state === "suspended") ctx.resume();
+    log("audio state", ctx.state);
+  }
+
+  // A barcode-scanner beep: a short square wave, like a piezo buzzer,
+  // with a fast fade in and out so it does not click.
+  function beep() {
+    const t = ctx.currentTime;
+    const dur = BEEP_MS / 1000;
+    const osc = ctx.createOscillator();
+    const filter = ctx.createBiquadFilter();
+    const gain = ctx.createGain();
+    osc.type = "square";
+    osc.frequency.setValueAtTime(BEEP_HZ, t);
+    filter.type = "lowpass";
+    filter.frequency.setValueAtTime(BEEP_HZ * 2.5, t);
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(BEEP_VOL, t + 0.004);
+    gain.gain.setValueAtTime(BEEP_VOL, t + dur - 0.012);
+    gain.gain.linearRampToValueAtTime(0, t + dur);
+    osc.connect(filter).connect(gain).connect(ctx.destination);
+    osc.start(t);
+    osc.stop(t + dur + 0.02);
+  }
+
+  function trackingNumber() {
+    let digits = "";
+    for (let i = 0; i < 12; i++) digits += Math.floor(Math.random() * 10);
+    return "TBA" + digits;
+  }
+
+  function scan() {
+    const now = performance.now();
+    if (now - lastScan < TAP_LOCKOUT_MS) return;
+    lastScan = now;
+
+    beep();
+    if (navigator.vibrate) navigator.vibrate(60);
+
+    count += 1;
+    localStorage.setItem("scanmazon.count", count);
+    localStorage.setItem("scanmazon.lastScanAt", Date.now());
+    countEl.textContent = count;
+    tracking.textContent = trackingNumber();
+    deliveryStatus.textContent = "Delivered";
+    statusBig.textContent = "SCANNED";
+    statusSmall.textContent = DELIVERED_TEXT;
+
+    // restart the CSS animations
+    app.classList.remove("scanned");
+    void app.offsetWidth;
+    app.classList.add("scanned");
+    log("scan", count, tracking.textContent);
+
+    clearTimeout(resetTimer);
+    resetTimer = setTimeout(() => {
+      app.classList.remove("scanned");
+      statusBig.textContent = "READY TO SCAN";
+      statusSmall.textContent = "Tap anywhere to scan";
+      deliveryStatus.textContent = "Out for delivery";
+    }, SCANNED_SHOW_MS);
+  }
+
+  async function keepScreenOn() {
+    // Needs HTTPS or localhost. Without it, the phone may sleep between houses.
+    try {
+      if ("wakeLock" in navigator) {
+        await navigator.wakeLock.request("screen");
+        log("wake lock on");
+      }
+    } catch (e) { log("wake lock failed", e.message); }
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") keepScreenOn();
+  });
+
+  startEl.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    unlockAudio();
+    keepScreenOn();
+    startEl.remove();
+  });
+
+  // pointerdown fires on touch, with no tap delay.
+  document.addEventListener("pointerdown", () => {
+    if (!ctx) return;
+    unlockAudio();
+    scan();
+  });
+
+  function tick() {
+    document.getElementById("clock").textContent =
+      new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  }
+  tick();
+  setInterval(tick, 10000);
+</script>
+</body>
+</html>
